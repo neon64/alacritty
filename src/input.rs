@@ -30,7 +30,7 @@ use glutin::{TouchPhase, MouseScrollDelta};
 
 use config;
 use event::{ClickState, Mouse};
-use index::{Line, Column, Side, Point};
+use index::{Line, AbsoluteLine, Column, Side, Point};
 use term::SizeInfo;
 use term::mode::{self, TermMode};
 use util::fmt::Red;
@@ -60,6 +60,9 @@ pub trait ActionContext {
     fn line_selection(&mut self, point: Point);
     fn mouse_mut(&mut self) -> &mut Mouse;
     fn mouse_coords(&self) -> Option<Point>;
+    fn move_visible_region_up(&mut self, lines: AbsoluteLine);
+    fn move_visible_region_down(&mut self, lines: AbsoluteLine);
+    fn jump_to_bottom(&mut self);
 }
 
 /// Describes a state and action to take in that state
@@ -151,6 +154,12 @@ pub enum Action {
 
     /// Quits Alacritty.
     Quit,
+
+    /// Scrolls up
+    ScrollUp,
+
+    /// Scrolls down
+    ScrollDown
 }
 
 impl Action {
@@ -194,6 +203,14 @@ impl Action {
                 // FIXME should do a more graceful shutdown
                 ::std::process::exit(0);
             },
+            Action::ScrollUp => {
+                println!("Scrolling up!!! :D");
+                ctx.move_visible_region_up(AbsoluteLine(1));
+            },
+            Action::ScrollDown => {
+                println!("Scrolling down!!! :D");
+                ctx.move_visible_region_down(AbsoluteLine(1));
+            }
         }
     }
 
@@ -445,6 +462,7 @@ impl<'a, A: ActionContext + 'a> Processor<'a, A> {
 
             self.ctx.write_to_pty(string.into_bytes());
             self.ctx.clear_selection();
+            self.ctx.jump_to_bottom();
         }
     }
 

@@ -13,7 +13,7 @@ use copypasta::{Clipboard, Load, Store};
 use config::{self, Config};
 use cli::Options;
 use display::OnResize;
-use index::{Line, Column, Side, Point};
+use index::{Line, AbsoluteLine, Column, Side, Point};
 use input::{self, MouseBinding, KeyBinding};
 use selection::Selection;
 use sync::FairMutex;
@@ -107,6 +107,21 @@ impl<'a, N: Notify + 'a> input::ActionContext for ActionContext<'a, N> {
     #[inline]
     fn mouse_mut(&mut self) -> &mut Mouse {
         self.mouse
+    }
+
+    #[inline]
+    fn move_visible_region_up(&mut self, lines: AbsoluteLine) {
+        self.terminal.move_visible_region_up(lines);
+    }
+
+    #[inline]
+    fn move_visible_region_down(&mut self, lines: AbsoluteLine) {
+        self.terminal.move_visible_region_down(lines);
+    }
+
+    #[inline]
+    fn jump_to_bottom(&mut self) {
+        self.terminal.move_visible_region_to_bottom();
     }
 }
 
