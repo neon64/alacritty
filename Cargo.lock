@@ -15,6 +15,8 @@ dependencies = [
  "glutin 0.9.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.30 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num 0.1.37 (registry+https://github.com/rust-lang/crates.io-index)",
+ "owned_slice 0.1.0",
  "mio 0.6.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "mio-more 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "notify 4.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -780,6 +782,13 @@ version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "shared_library 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "owned_slice"
+version = "0.1.0"
+dependencies = [
+ "num 0.1.37 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
