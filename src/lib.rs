@@ -40,6 +40,8 @@ extern crate glutin;
 extern crate libc;
 extern crate mio;
 extern crate notify;
+extern crate num;
+extern crate owned_slice;
 extern crate parking_lot;
 extern crate serde;
 extern crate serde_json;
