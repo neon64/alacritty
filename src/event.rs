@@ -140,6 +140,7 @@ pub struct Mouse {
     pub last_click_timestamp: Instant,
     pub click_state: ClickState,
     pub scroll_px: i32,
+    pub scroll_line: f32,
     pub line: Line,
     pub column: Column,
     pub cell_side: Side
@@ -154,6 +155,7 @@ impl Default for Mouse {
             left_button_state: ElementState::Released,
             click_state: ClickState::None,
             scroll_px: 0,
+            scroll_line: 0.0,
             line: Line(0),
             column: Column(0),
             cell_side: Side::Left,
