@@ -535,7 +535,7 @@ mod tests {
     use term::{SizeInfo, Term, TermMode, mode};
     use event::{Mouse, ClickState};
     use config::{self, Config, ClickHandler};
-    use index::{Point, Side};
+    use index::{Point, Side, AbsoluteLine};
     use selection::Selection;
 
     use super::{Action, Binding, Processor};
@@ -595,6 +595,12 @@ mod tests {
         fn mouse_mut(&mut self) -> &mut Mouse {
             self.mouse
         }
+
+        fn move_visible_region_up(&mut self, lines: AbsoluteLine) {}
+
+        fn move_visible_region_down(&mut self, lines: AbsoluteLine) {}
+        
+        fn jump_to_bottom(&mut self) {}
     }
 
     macro_rules! test_clickstate {
