@@ -319,6 +319,7 @@ impl<T> Grid<T> {
     fn shrink_lines(&mut self, lines: index::Line) {
         while index::Line(self.raw.len()) != lines {
             self.raw.pop_back();
+            let _ = self.move_visible_region_up(AbsoluteLine(1));
         }
 
         self.lines = lines;
