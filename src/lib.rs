@@ -39,6 +39,7 @@ extern crate font;
 extern crate glutin;
 extern crate libc;
 extern crate mio;
+extern crate mio_more;
 extern crate notify;
 extern crate num;
 extern crate owned_slice;

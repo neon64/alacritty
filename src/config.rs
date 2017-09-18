@@ -18,8 +18,8 @@ use font::Size;
 use serde_yaml;
 use serde::{self, de, Deserialize};
 use serde::de::Error as SerdeError;
-use serde::de::{Visitor, MapVisitor, Unexpected};
-use notify::{Watcher as WatcherApi, RecommendedWatcher as FileWatcher, op};
+use serde::de::{Visitor, MapAccess, Unexpected};
+use notify::{Watcher, watcher, DebouncedEvent, RecursiveMode};
 
 use glutin::ModifiersState;
 
@@ -52,8 +52,8 @@ pub struct ClickHandler {
     pub threshold: Duration,
 }
 
-fn deserialize_duration_ms<D>(deserializer: D) -> ::std::result::Result<Duration, D::Error>
-    where D: de::Deserializer
+fn deserialize_duration_ms<'a, D>(deserializer: D) -> ::std::result::Result<Duration, D::Error>
+    where D: de::Deserializer<'a>
 {
     let threshold_ms = u64::deserialize(deserializer)?;
     Ok(Duration::from_millis(threshold_ms))
@@ -281,6 +281,10 @@ pub struct Config {
     /// Hide cursor when typing
     #[serde(default)]
     hide_cursor_when_typing: bool,
+
+    /// Live config reload
+    #[serde(default="true_bool")]
+    live_config_reload: bool,
 }
 
 fn default_padding() -> Delta {
@@ -334,6 +338,7 @@ impl Default for Config {
             visual_bell: Default::default(),
             env: Default::default(),
             hide_cursor_when_typing: Default::default(),
+            live_config_reload: Default::default(),
             padding: default_padding(),
         }
     }
@@ -370,13 +375,13 @@ impl ModsWrapper {
     }
 }
 
-impl de::Deserialize for ModsWrapper {
+impl<'a> de::Deserialize<'a> for ModsWrapper {
     fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
-        where D: de::Deserializer
+        where D: de::Deserializer<'a>
     {
         struct ModsVisitor;
 
-        impl Visitor for ModsVisitor {
+        impl<'a> Visitor<'a> for ModsVisitor {
             type Value = ModsWrapper;
 
             fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -413,13 +418,13 @@ impl ActionWrapper {
     }
 }
 
-impl de::Deserialize for ActionWrapper {
+impl<'a> de::Deserialize<'a> for ActionWrapper {
     fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
-        where D: de::Deserializer
+        where D: de::Deserializer<'a>
     {
         struct ActionVisitor;
 
-        impl Visitor for ActionVisitor {
+        impl<'a> Visitor<'a> for ActionVisitor {
             type Value = ActionWrapper;
 
             fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -464,13 +469,13 @@ struct ModeWrapper {
     pub not_mode: TermMode,
 }
 
-impl de::Deserialize for ModeWrapper {
+impl<'a> de::Deserialize<'a> for ModeWrapper {
     fn deserialize<D>(deserializer:  D) -> ::std::result::Result<Self, D::Error>
-        where D: de::Deserializer
+        where D: de::Deserializer<'a>
     {
         struct ModeVisitor;
 
-        impl Visitor for ModeVisitor {
+        impl<'a> Visitor<'a> for ModeVisitor {
             type Value = ModeWrapper;
 
             fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -510,13 +515,13 @@ impl MouseButton {
     }
 }
 
-impl de::Deserialize for MouseButton {
+impl<'a> de::Deserialize<'a> for MouseButton {
     fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
-        where D: de::Deserializer
+        where D: de::Deserializer<'a>
     {
         struct MouseButtonVisitor;
 
-        impl Visitor for MouseButtonVisitor {
+        impl<'a> Visitor<'a> for MouseButtonVisitor {
             type Value = MouseButton;
 
             fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -586,9 +591,9 @@ impl RawBinding {
     }
 }
 
-impl de::Deserialize for RawBinding {
+impl<'a> de::Deserialize<'a> for RawBinding {
     fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
-        where D: de::Deserializer
+        where D: de::Deserializer<'a>
     {
         enum Field {
             Key,
@@ -600,9 +605,9 @@ impl de::Deserialize for RawBinding {
             Command,
         }
 
-        impl de::Deserialize for Field {
+        impl<'a> de::Deserialize<'a> for Field {
             fn deserialize<D>(deserializer: D) -> ::std::result::Result<Field, D::Error>
-                where D: de::Deserializer
+                where D: de::Deserializer<'a>
             {
                 struct FieldVisitor;
 
@@ -610,7 +615,7 @@ impl de::Deserialize for RawBinding {
                         "key", "mods", "mode", "action", "chars", "mouse", "command",
                 ];
 
-                impl Visitor for FieldVisitor {
+                impl<'a> Visitor<'a> for FieldVisitor {
                     type Value = Field;
 
                     fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -633,12 +638,12 @@ impl de::Deserialize for RawBinding {
                     }
                 }
 
-                deserializer.deserialize_struct_field(FieldVisitor)
+                deserializer.deserialize_struct("Field", FIELDS, FieldVisitor)
             }
         }
 
         struct RawBindingVisitor;
-        impl Visitor for RawBindingVisitor {
+        impl<'a> Visitor<'a> for RawBindingVisitor {
             type Value = RawBinding;
 
             fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -647,9 +652,9 @@ impl de::Deserialize for RawBinding {
 
             fn visit_map<V>(
                 self,
-                mut visitor: V
+                mut map: V
             ) -> ::std::result::Result<RawBinding, V::Error>
-                where V: MapVisitor,
+                where V: MapAccess<'a>,
             {
                 let mut mods: Option<ModifiersState> = None;
                 let mut key: Option<::glutin::VirtualKeyCode> = None;
@@ -662,14 +667,14 @@ impl de::Deserialize for RawBinding {
 
                 use ::serde::de::Error;
 
-                while let Some(struct_key) = visitor.visit_key::<Field>()? {
+                while let Some(struct_key) = map.next_key::<Field>()? {
                     match struct_key {
                         Field::Key => {
                             if key.is_some() {
                                 return Err(<V::Error as Error>::duplicate_field("key"));
                             }
 
-                            let coherent_key = visitor.visit_value::<Key>()?;
+                            let coherent_key = map.next_value::<Key>()?;
                             key = Some(coherent_key.to_glutin_key());
                         },
                         Field::Mods => {
@@ -677,14 +682,14 @@ impl de::Deserialize for RawBinding {
                                 return Err(<V::Error as Error>::duplicate_field("mods"));
                             }
 
-                            mods = Some(visitor.visit_value::<ModsWrapper>()?.into_inner());
+                            mods = Some(map.next_value::<ModsWrapper>()?.into_inner());
                         },
                         Field::Mode => {
                             if mode.is_some() {
                                 return Err(<V::Error as Error>::duplicate_field("mode"));
                             }
 
-                            let mode_deserializer = visitor.visit_value::<ModeWrapper>()?;
+                            let mode_deserializer = map.next_value::<ModeWrapper>()?;
                             mode = Some(mode_deserializer.mode);
                             not_mode = Some(mode_deserializer.not_mode);
                         },
@@ -693,28 +698,28 @@ impl de::Deserialize for RawBinding {
                                 return Err(<V::Error as Error>::duplicate_field("action"));
                             }
 
-                            action = Some(visitor.visit_value::<ActionWrapper>()?.into_inner());
+                            action = Some(map.next_value::<ActionWrapper>()?.into_inner());
                         },
                         Field::Chars => {
                             if chars.is_some() {
                                 return Err(<V::Error as Error>::duplicate_field("chars"));
                             }
 
-                            chars = Some(visitor.visit_value()?);
+                            chars = Some(map.next_value()?);
                         },
                         Field::Mouse => {
                             if chars.is_some() {
                                 return Err(<V::Error as Error>::duplicate_field("mouse"));
                             }
 
-                            mouse = Some(visitor.visit_value::<MouseButton>()?.into_inner());
+                            mouse = Some(map.next_value::<MouseButton>()?.into_inner());
                         },
                         Field::Command => {
                             if command.is_some() {
                                 return Err(<V::Error as Error>::duplicate_field("command"));
                             }
 
-                            command = Some(visitor.visit_value::<CommandWrapper>()?);
+                            command = Some(map.next_value::<CommandWrapper>()?);
                         },
                     }
                 }
@@ -764,18 +769,18 @@ impl de::Deserialize for RawBinding {
 }
 
 
-impl de::Deserialize for Alpha {
+impl<'a> de::Deserialize<'a> for Alpha {
     fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
-        where D: de::Deserializer
+        where D: de::Deserializer<'a>
     {
         let value = f32::deserialize(deserializer)?;
         Ok(Alpha::new(value))
     }
 }
 
-impl de::Deserialize for MouseBinding {
+impl<'a> de::Deserialize<'a> for MouseBinding {
     fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
-        where D: de::Deserializer
+        where D: de::Deserializer<'a>
     {
         let raw = RawBinding::deserialize(deserializer)?;
         raw.into_mouse_binding()
@@ -783,9 +788,9 @@ impl de::Deserialize for MouseBinding {
     }
 }
 
-impl de::Deserialize for KeyBinding {
+impl<'a> de::Deserialize<'a> for KeyBinding {
     fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
-        where D: de::Deserializer
+        where D: de::Deserializer<'a>
     {
         let raw = RawBinding::deserialize(deserializer)?;
         raw.into_key_binding()
@@ -822,8 +827,8 @@ pub struct Colors {
     pub dim: Option<AnsiColors>,
 }
 
-fn deserialize_cursor_colors<D>(deserializer: D) -> ::std::result::Result<CursorColors, D::Error>
-    where D: de::Deserializer
+fn deserialize_cursor_colors<'a, D>(deserializer: D) -> ::std::result::Result<CursorColors, D::Error>
+    where D: de::Deserializer<'a>
 {
     let either = CursorOrPrimaryColors::deserialize(deserializer)?;
     Ok(either.into_cursor_colors())
@@ -948,12 +953,12 @@ pub struct AnsiColors {
 ///
 /// This is *not* the deserialize impl for Rgb since we want a symmetric
 /// serialize/deserialize impl for ref tests.
-fn rgb_from_hex<D>(deserializer: D) -> ::std::result::Result<Rgb, D::Error>
-    where D: de::Deserializer
+fn rgb_from_hex<'a, D>(deserializer: D) -> ::std::result::Result<Rgb, D::Error>
+    where D: de::Deserializer<'a>
 {
     struct RgbVisitor;
 
-    impl ::serde::de::Visitor for RgbVisitor {
+    impl<'a> Visitor<'a> for RgbVisitor {
         type Value = Rgb;
 
         fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -1209,6 +1214,12 @@ impl Config {
         self.hide_cursor_when_typing
     }
 
+    /// Live config reload
+    #[inline]
+    pub fn live_config_reload(&self) -> bool {
+        self.live_config_reload
+    }
+
     pub fn load_from<P: Into<PathBuf>>(path: P) -> Result<Config> {
         let path = path.into();
         let raw = Config::read_file(path.as_path())?;
@@ -1317,13 +1328,13 @@ impl Default for Delta {
 }
 
 trait DeserializeFromF32 : Sized {
-    fn deserialize_from_f32<D>(D) -> ::std::result::Result<Self, D::Error>
-        where D: serde::de::Deserializer;
+    fn deserialize_from_f32<'a, D>(D) -> ::std::result::Result<Self, D::Error>
+        where D: serde::de::Deserializer<'a>;
 }
 
 impl DeserializeFromF32 for Size {
-    fn deserialize_from_f32<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
-        where D: serde::de::Deserializer
+    fn deserialize_from_f32<'a, D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where D: serde::de::Deserializer<'a>
     {
         use std::marker::PhantomData;
 
@@ -1331,8 +1342,8 @@ impl DeserializeFromF32 for Size {
             _marker: PhantomData<__D>,
         }
 
-        impl<__D> ::serde::de::Visitor for FloatVisitor<__D>
-            where __D: ::serde::de::Deserializer
+        impl<'a, __D> Visitor<'a> for FloatVisitor<__D>
+            where __D: serde::de::Deserializer<'a>
         {
             type Value = f64;
 
@@ -1495,34 +1506,21 @@ impl Monitor {
         Monitor {
             _thread: ::util::thread::spawn_named("config watcher", move || {
                 let (tx, rx) = mpsc::channel();
-                let mut watcher = FileWatcher::new(tx).unwrap();
+                // The Duration argument is a debouncing period.
+                let mut watcher = watcher(tx, Duration::from_millis(10)).unwrap();
                 let config_path = ::std::fs::canonicalize(path)
                     .expect("canonicalize config path");
 
-                watcher.watch(&config_path).expect("watch alacritty yml");
+                watcher.watch(&config_path, RecursiveMode::NonRecursive).expect("watch alacritty yml");
 
                 loop {
                     let event = rx.recv().expect("watcher event");
-                    let ::notify::Event { path, op } = event;
 
-                    if let Ok(op) = op {
-                        // Skip events that are just a rename
-                        if op.contains(op::RENAME) && !op.contains(op::WRITE) {
-                            continue;
-                        }
-
-                        // Need to handle ignore for linux
-                        if op.contains(op::IGNORED) {
-                            if let Some(path) = path.as_ref() {
-                                if let Err(err) = watcher.watch(&path) {
-                                    err_println!("failed to establish watch on {:?}: {:?}",
-                                                 path, err);
-                                }
-                            }
-                        }
-
-                        // Reload file
-                        path.map(|path| {
+                    match event {
+                        DebouncedEvent::Rename(_, _) => continue,
+                        DebouncedEvent::Write(path) | DebouncedEvent::Create(path)
+                         | DebouncedEvent::Chmod(path) => {
+                            // Reload file
                             if path == config_path {
                                 match Config::load_from(path) {
                                     Ok(config) => {
@@ -1531,8 +1529,9 @@ impl Monitor {
                                     },
                                     Err(err) => err_println!("Ignoring invalid config: {}", err),
                                 }
-                            }
-                        });
+                             }
+                        }
+                        _ => {}
                     }
                 }
             }),
