@@ -596,9 +596,13 @@ impl<T> Grid<T> {
         &self.raw[self.absolute_to_raw_index(line)]
     }
 
-    pub fn get_visible_line(&self, line: Line) -> &Row<T> {
+    pub fn get_visible_line(&self, line: Line) -> Option<&Row<T>> {
         let idx = self.absolute_to_raw_index(self.visible_region_start + line.to_absolute());
-        &self.raw[idx]
+        if idx < self.lines.0 {
+            Some(&self.raw[idx])
+        } else {
+            None
+        }
     }
 
     /// Enable or disable scrollback temporarily
