@@ -333,7 +333,12 @@ impl<'a> Iterator for RenderableCellsIter<'a> {
                 // Grab current state for this iteration
                 let line = self.line;
                 let column = self.column;
-                let cell = &self.grid.get_visible_line(self.line)[column];
+
+                let visible_line = self.grid.get_visible_line(self.line);
+                let cell = match visible_line {
+                    None => { self.column += 1; continue },
+                    Some(visible) => &visible[column],
+                };
 
                 let index = Linear(self.grid.visible_to_absolute_line(line).0 * self.grid.num_cols().0 + column.0);
                 let mut cursor_cell = false;
