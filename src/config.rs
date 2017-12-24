@@ -209,24 +209,55 @@ impl Default for Alpha {
     }
 }
 
-/// Top-level config type
-#[derive(Debug, Deserialize)]
-pub struct Config {
-    /// TERM env variable
-    #[serde(default)]
-    env: HashMap<String, String>,
-
+#[derive(Debug, Copy, Clone, Deserialize)]
+pub struct WindowConfig {
     /// Initial dimensions
     #[serde(default)]
     dimensions: Dimensions,
+
+    /// Pixel padding
+    #[serde(default="default_padding")]
+    padding: Delta,
+
+    /// Draw the window with title bar / borders
+    #[serde(default)]
+    decorations: bool,
+}
+
+impl WindowConfig {
+    pub fn decorations(&self) -> bool {
+        self.decorations
+    }
+}
+
+impl Default for WindowConfig {
+    fn default() -> Self {
+        WindowConfig{
+            dimensions: Default::default(),
+            padding: default_padding(),
+            decorations: true,
+        }
+    }
+}
+
+/// Top-level config type
+#[derive(Debug, Deserialize)]
+pub struct Config {
+    /// Initial dimensions
+    #[serde(default)]
+    dimensions: Option<Dimensions>,
+
+    /// Pixel padding
+    #[serde(default)]
+    padding: Option<Delta>,
 
     /// Maximum size of the scrollback buffer
     #[serde(default)]
     scrollback: Scrollback,
 
-    /// Pixel padding
-    #[serde(default="default_padding")]
-    padding: Delta,
+    /// TERM env variable
+    #[serde(default)]
+    env: HashMap<String, String>,
 
     /// Font configuration
     #[serde(default)]
@@ -250,6 +281,10 @@ pub struct Config {
     /// Background opacity from 0.0 to 1.0
     #[serde(default)]
     background_opacity: Alpha,
+
+    /// Window configuration
+    #[serde(default)]
+    window: WindowConfig,
 
     /// Keybindings
     #[serde(default="default_key_bindings")]
@@ -323,7 +358,8 @@ impl Default for Config {
     fn default() -> Config {
         Config {
             draw_bold_text_with_bright_colors: true,
-            dimensions: Default::default(),
+            dimensions: None,
+            padding: None,
             scrollback: Default::default(),
             font: Default::default(),
             render_timer: Default::default(),
@@ -341,7 +377,7 @@ impl Default for Config {
             hide_cursor_when_typing: Default::default(),
             cursor_style: Default::default(),
             live_config_reload: true,
-            padding: default_padding(),
+            window: Default::default(),
         }
     }
 }
@@ -430,7 +466,7 @@ impl<'a> de::Deserialize<'a> for ActionWrapper {
             type Value = ActionWrapper;
 
             fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.write_str("Paste, Copy, PasteSelection, IncreaseFontSize, DecreaseFontSize, ResetFontSize, Quit, ScrollUp, ScrollDown, PageUp or PageDown")
+                f.write_str("Paste, Copy, PasteSelection, IncreaseFontSize, DecreaseFontSize, ResetFontSize, Quit, ScrollUp, ScrollDown, PageUp, or PageDown")
             }
 
             fn visit_str<E>(self, value: &str) -> ::std::result::Result<ActionWrapper, E>
@@ -865,10 +901,10 @@ impl CursorOrPrimaryColors {
             },
             CursorOrPrimaryColors::Primary { foreground, background } => {
                 // Must print in config since logger isn't setup yet.
-                println!("{}",
-                    Yellow("You're using a deprecated form of cursor color config. Please update \
-                        your config to use `text` and `cursor` properties instead of `foreground` \
-                        and `background`. This will become an error in a future release.")
+                eprintln!("{}",
+                    Yellow("Config `colors.cursor.foreground` and `colors.cursor.background` \
+                            are deprecated. Please use `colors.cursor.text` and \
+                            `colors.cursor.cursor` instead.")
                 );
                 CursorColors {
                     text: foreground,
@@ -1158,7 +1194,8 @@ impl Config {
     }
 
     pub fn padding(&self) -> &Delta {
-        &self.padding
+        self.padding.as_ref()
+            .unwrap_or(&self.window.padding)
     }
 
     #[inline]
@@ -1175,7 +1212,13 @@ impl Config {
     /// Get window dimensions
     #[inline]
     pub fn dimensions(&self) -> Dimensions {
-        self.dimensions
+        self.dimensions.unwrap_or(self.window.dimensions)
+    }
+
+    /// Get window config
+    #[inline]
+    pub fn window(&self) -> &WindowConfig {
+        &self.window
     }
 
     /// Get visual bell config
@@ -1238,6 +1281,7 @@ impl Config {
         let raw = Config::read_file(path.as_path())?;
         let mut config: Config = serde_yaml::from_str(&raw)?;
         config.config_path = Some(path);
+        config.print_deprecation_warnings();
 
         Ok(config)
     }
@@ -1251,6 +1295,19 @@ impl Config {
         }
 
         Ok(contents)
+    }
+
+    fn print_deprecation_warnings(&self) {
+        use ::util::fmt;
+        if self.dimensions.is_some() {
+            eprintln!("{}", fmt::Yellow("Config `dimensions` is deprecated. \
+                                        Please use `window.dimensions` instead."));
+        }
+
+        if self.padding.is_some() {
+            eprintln!("{}", fmt::Yellow("Config `padding` is deprecated. \
+                                        Please use `window.padding` instead."));
+        }
     }
 }
 

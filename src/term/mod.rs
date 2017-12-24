@@ -414,19 +414,20 @@ impl<'a> Iterator for RenderableCellsIter<'a> {
 pub mod mode {
     bitflags! {
         pub struct TermMode: u16 {
-            const SHOW_CURSOR         = 0b000000000001;
-            const APP_CURSOR          = 0b000000000010;
-            const APP_KEYPAD          = 0b000000000100;
-            const MOUSE_REPORT_CLICK  = 0b000000001000;
-            const BRACKETED_PASTE     = 0b000000010000;
-            const SGR_MOUSE           = 0b000000100000;
-            const MOUSE_MOTION        = 0b000001000000;
-            const LINE_WRAP           = 0b000010000000;
-            const LINE_FEED_NEW_LINE  = 0b000100000000;
-            const ORIGIN              = 0b001000000000;
-            const INSERT              = 0b010000000000;
-            const FOCUS_IN_OUT        = 0b100000000000;
-            const ANY                 = 0b111111111111;
+            const SHOW_CURSOR         = 0b0000000000001;
+            const APP_CURSOR          = 0b0000000000010;
+            const APP_KEYPAD          = 0b0000000000100;
+            const MOUSE_REPORT_CLICK  = 0b0000000001000;
+            const BRACKETED_PASTE     = 0b0000000010000;
+            const SGR_MOUSE           = 0b0000000100000;
+            const MOUSE_MOTION        = 0b0000001000000;
+            const LINE_WRAP           = 0b0000010000000;
+            const LINE_FEED_NEW_LINE  = 0b0000100000000;
+            const ORIGIN              = 0b0001000000000;
+            const INSERT              = 0b0010000000000;
+            const FOCUS_IN_OUT        = 0b0100000000000;
+            const ALT_SCREEN          = 0b1000000000000;
+            const ANY                 = 0b1111111111111;
             const NONE                = 0;
         }
     }
@@ -870,71 +871,41 @@ impl Term {
                 self.push(c);
             }
         }
-        trait Append<T> : PushChar {
-            fn append(&mut self, grid: &Grid<Cell>, line: AbsoluteLine, cols: T) -> Option<Range<Column>>;
+
+        use std::ops::Range;
+
+        trait Append : PushChar {
+            fn append(&mut self, grid: &Grid<Cell>, line: AbsoluteLine, cols: Range<Column>) -> Option<Range<Column>>;
         }
 
-        use std::ops::{Range, RangeTo, RangeFrom, RangeFull};
-
-        impl Append<Range<Column>> for String {
+        impl Append for String {
             fn append(
                 &mut self,
                 grid: &Grid<Cell>,
                 line: AbsoluteLine,
                 cols: Range<Column>
             ) -> Option<Range<Column>> {
-                let line = &grid.get_absolute_line(line).expect("invalid line");
-                let line_length = line.line_length();
+                let grid_line = &grid.get_absolute_line(line).expect("invalid line");
+                let line_length = grid_line.line_length();
                 let line_end = min(line_length, cols.end + 1);
 
                 if cols.start >= line_end {
                     None
                 } else {
-                    for cell in &line[cols.start..line_end] {
+                    for cell in &grid_line[cols.start..line_end] {
                         if !cell.flags.contains(cell::WIDE_CHAR_SPACER) {
                             self.push(cell.c);
                         }
                     }
 
-                    Some(cols.start..line_end)
+                    let range = Some(cols.start..line_end);
+                    if cols.end >= grid.num_cols() - 1 {
+                        range.as_ref()
+                            .map(|range| self.maybe_newline(grid, line, range.end));
+                    }
+
+                    range
                 }
-            }
-        }
-
-        impl Append<RangeTo<Column>> for String {
-            #[inline]
-            fn append(&mut self, grid: &Grid<Cell>, line: AbsoluteLine, cols: RangeTo<Column>) -> Option<Range<Column>> {
-                self.append(grid, line, Column(0)..cols.end)
-            }
-        }
-
-        impl Append<RangeFrom<Column>> for String {
-            #[inline]
-            fn append(
-                &mut self,
-                grid: &Grid<Cell>,
-                line: AbsoluteLine,
-                cols: RangeFrom<Column>
-            ) -> Option<Range<Column>> {
-                let range = self.append(grid, line, cols.start..Column(usize::max_value() - 1));
-                range.as_ref()
-                    .map(|range| self.maybe_newline(grid, line, range.end));
-                range
-            }
-        }
-
-        impl Append<RangeFull> for String {
-            #[inline]
-            fn append(
-                &mut self,
-                grid: &Grid<Cell>,
-                line: AbsoluteLine,
-                _: RangeFull
-            ) -> Option<Range<Column>> {
-                let range = self.append(grid, line, Column(0)..Column(usize::max_value() - 1));
-                range.as_ref()
-                    .map(|range| self.maybe_newline(grid, line, range.end));
-                range
             }
         }
 
@@ -944,7 +915,7 @@ impl Term {
         // whilst clipping them to make sure they are valid line indices.
         let (start, end) = span.to_locations(self.grid.min_absolute_line());
         let line_count = end.line - start.line;
-
+        let max_col = Column(usize::max_value() - 1);
 
         match line_count {
             // Selection within single line
@@ -955,24 +926,24 @@ impl Term {
             // Selection ends on line following start
             AbsoluteLine(1) => {
                 // Starting line
-                res.append(&self.grid, start.line, start.col..);
+                res.append(&self.grid, start.line, start.col..max_col);
 
                 // Ending line
-                res.append(&self.grid, end.line, ..end.col);
+                res.append(&self.grid, end.line, Column(0)..end.col);
             },
 
             // Multi line selection
             _ => {
                 // Starting line
-                res.append(&self.grid, start.line, start.col..);
+                res.append(&self.grid, start.line, start.col..max_col);
 
                 let middle_range = IndexRange::from((start.line + 1)..(end.line));
                 for line in middle_range {
-                    res.append(&self.grid, line, ..);
+                    res.append(&self.grid, line, Column(0)..max_col);
                 }
 
                 // Ending line
-                res.append(&self.grid, end.line, ..end.col);
+                res.append(&self.grid, end.line, Column(0)..end.col);
             }
         }
 
@@ -1845,6 +1816,7 @@ impl ansi::Handler for Term {
         trace!("set_mode: {:?}", mode);
         match mode {
             ansi::Mode::SwapScreenAndSetRestoreCursor => {
+                self.mode.insert(mode::ALT_SCREEN);
                 self.save_cursor_position();
                 if !self.alt {
                     self.swap_alt();
@@ -1877,6 +1849,7 @@ impl ansi::Handler for Term {
         trace!("unset_mode: {:?}", mode);
         match mode {
             ansi::Mode::SwapScreenAndSetRestoreCursor => {
+                self.mode.remove(mode::ALT_SCREEN);
                 self.restore_cursor_position();
                 if self.alt {
                     self.swap_alt();
@@ -2043,7 +2016,7 @@ mod tests {
 
         let selection = Selection::lines(AbsolutePoint { line: AbsoluteLine(0), col: Column(3) });
         match selection.to_span(&term) {
-            Some(span) => assert_eq!(term.string_from_selection(&span), "\"aa\"a"),
+            Some(span) => assert_eq!(term.string_from_selection(&span), "\"aa\"a\n"),
             _ => ()
         }
     }
