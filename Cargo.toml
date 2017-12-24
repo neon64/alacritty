@@ -37,7 +37,7 @@ glutin = "0.9.2"
 clippy = { version = "*", optional = true }
 env_logger = "0.4"
 owned_slice = { git = "https://github.com/neon64/owned-slice" }
-num = "0.1.37"
+num-traits = "0.1"
 
 [target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os="dragonfly", target_os="openbsd"))'.dependencies]
 x11-dl = "2"

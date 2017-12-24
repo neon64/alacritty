@@ -18,7 +18,7 @@
 use std::cmp::{Ord, Ordering};
 use std::fmt;
 use std::ops::{self, Deref, Add, Range};
-use num::{Zero, One};
+use num_traits::{Zero, One};
 
 /// The side of a cell
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
