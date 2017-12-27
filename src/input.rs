@@ -397,13 +397,13 @@ impl<'a, A: ActionContext + 'a> Processor<'a, A> {
     }
 
     pub fn on_mouse_wheel(&mut self, delta: MouseScrollDelta, phase: TouchPhase) {
-        let mut line_delta: isize = 0;
+        let mut line_delta: f32 = 0.0;
 
         // handle scrolling
         match delta {
             MouseScrollDelta::LineDelta(ref _columns, ref lines) => {
+                line_delta = self.ctx.mouse_mut().lines_scrolled + *lines;
                 if *lines != 0.0 {
-                    line_delta = *lines as isize;
 
                     let scroll_sensitivity = 5.0;
                     self.ctx.mouse_mut().scroll_line += lines * scroll_sensitivity;
@@ -422,6 +422,7 @@ impl<'a, A: ActionContext + 'a> Processor<'a, A> {
                         }
                     }
                 }
+                self.ctx.mouse_mut().lines_scrolled = line_delta % 1.0;
             },
             MouseScrollDelta::PixelDelta(ref _x, ref y) => {
                 match phase {
@@ -435,11 +436,11 @@ impl<'a, A: ActionContext + 'a> Processor<'a, A> {
 
                         while self.ctx.mouse_mut().scroll_px.abs() >= height {
                             if self.ctx.mouse_mut().scroll_px > 0 {
-                                line_delta -= 1;
+                                line_delta -= 1.0;
                                 self.ctx.mouse_mut().scroll_px -= height;
                                 self.ctx.move_visible_region_up(AbsoluteLine(1));
                             } else {
-                                line_delta += 1;
+                                line_delta += 1.0;
                                 self.ctx.mouse_mut().scroll_px += height;
                                 self.ctx.move_visible_region_down(AbsoluteLine(1));
                             };
@@ -457,13 +458,13 @@ impl<'a, A: ActionContext + 'a> Processor<'a, A> {
             return;
         }
 
-        let code = if line_delta > 0 {
+        let code = if line_delta > 0.0 {
             64
         } else {
             65
         };
 
-        for _ in 0..(line_delta.abs()) {
+        for _ in 0..(line_delta.abs() as usize) {
             if self.ctx.terminal_mode().intersects(mode::ALT_SCREEN) {
                 // Faux scrolling
                 if code == 64 {
