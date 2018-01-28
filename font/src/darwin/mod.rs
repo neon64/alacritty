@@ -38,9 +38,7 @@ use core_text::font_descriptor::kCTFontVerticalOrientation;
 use core_text::font_descriptor::{CTFontDescriptor, CTFontDescriptorRef, CTFontOrientation};
 use core_text::font_descriptor::SymbolicTraitAccessors;
 
-use euclid::point::Point2D;
-use euclid::rect::Rect;
-use euclid::size::Size2D;
+use euclid::{Point2D, Rect, Size2D};
 
 use super::{FontDesc, RasterizedGlyph, Metrics, FontKey, GlyphKey};
 
@@ -309,7 +307,7 @@ fn cascade_list_for_languages(
 ) -> Vec<Descriptor> {
 
     // convert language type &Vec<String> -> CFArray
-    let langarr:CFArray = {
+    let langarr:CFArray<CFString> = {
         let tmp:Vec<CFString> = languages.iter()
             .map(|language| CFString::new(&language))
             .collect();
@@ -317,7 +315,7 @@ fn cascade_list_for_languages(
     };
 
     // CFArray of CTFontDescriptorRef (again)
-    let list = ct_cascade_list_for_languages(ct_font, &langarr);
+    let list = ct_cascade_list_for_languages(ct_font, &langarr.as_untyped());
 
     // convert CFArray to Vec<Descriptor>
     list.into_iter()
@@ -463,6 +461,35 @@ impl Font {
     }
 
     pub fn get_glyph(&self, character: char, _size: f64, use_thin_strokes: bool) -> Result<RasterizedGlyph, Error> {
+        // Render custom symbols for underline and beam cursor
+        match character {
+            super::UNDERLINE_CURSOR_CHAR => {
+                // Get the bottom of the bounding box
+                let descent = -(self.ct_font.descent() as i32);
+                // Get the width of the cell
+                let width = self.glyph_advance('0') as i32;
+                // Return the new custom glyph
+                return super::get_underline_cursor_glyph(descent, width);
+            }
+            super::BEAM_CURSOR_CHAR | super::BOX_CURSOR_CHAR => {
+                // Get the top of the bounding box
+                let metrics = self.metrics();
+                let height = metrics.line_height;
+                let ascent = (height - self.ct_font.descent()).ceil();
+
+                // Get the width of the cell
+                let width = self.glyph_advance('0') as i32;
+
+                // Return the new custom glyph
+                if character == super::BEAM_CURSOR_CHAR {
+                    return super::get_beam_cursor_glyph(ascent as i32, height as i32, width);
+                } else {
+                    return super::get_box_cursor_glyph(ascent as i32, height as i32, width);
+                }
+            }
+            _ => ()
+        }
+
         let glyph_index = self.glyph_index(character)
             .ok_or(Error::MissingGlyph(character))?;
 

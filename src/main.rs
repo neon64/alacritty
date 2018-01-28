@@ -13,8 +13,14 @@
 // limitations under the License.
 //
 //! Alacritty - The GPU Enhanced Terminal
-#![cfg_attr(feature = "clippy", plugin(clippy))]
 #![cfg_attr(feature = "clippy", feature(plugin))]
+#![cfg_attr(feature = "clippy", plugin(clippy))]
+#![cfg_attr(feature = "clippy", deny(clippy))]
+#![cfg_attr(feature = "clippy", deny(enum_glob_use))]
+#![cfg_attr(feature = "clippy", deny(if_not_else))]
+#![cfg_attr(feature = "clippy", deny(wrong_pub_self_convention))]
+#![cfg_attr(feature = "nightly", feature(core_intrinsics))]
+#![cfg_attr(all(test, feature = "bench"), feature(test))]
 
 #[macro_use]
 extern crate alacritty;
@@ -24,6 +30,7 @@ extern crate log;
 
 use std::error::Error;
 use std::sync::Arc;
+#[cfg(target_os = "macos")]
 use std::env;
 
 use alacritty::cli;
@@ -45,7 +52,9 @@ fn main() {
     let config = load_config(&options);
 
     // Switch to home directory
+    #[cfg(target_os = "macos")]
     env::set_current_dir(env::home_dir().unwrap()).unwrap();
+    // Set locale
     #[cfg(target_os = "macos")]
     locale::set_locale_environment();
 
@@ -64,23 +73,15 @@ fn main() {
 /// /dev/null, we load the compiled-in defaults.
 fn load_config(options: &cli::Options) -> Config {
     let config_path = options.config_path()
-        .or_else(|| Config::installed_config())
+        .or_else(Config::installed_config)
         .unwrap_or_else(|| {
             Config::write_defaults()
                 .unwrap_or_else(|err| die!("Write defaults config failure: {}", err))
         });
 
     Config::load_from(&*config_path).unwrap_or_else(|err| {
-        match err {
-            config::Error::NotFound => {
-                die!("Config file not found at: {}", config_path.display());
-            },
-            config::Error::Empty => {
-                eprintln!("Empty config; Loading defaults");
-                Config::default()
-            },
-            _ => die!("{}", err),
-        }
+        eprintln!("Error: {}; Loading default config", err);
+        Config::default()
     })
 }
 
@@ -124,7 +125,7 @@ fn run(mut config: Config, options: &cli::Options) -> Result<(), Box<Error>> {
     // The pty forks a process to run the shell on the slave side of the
     // pseudoterminal. A file descriptor for the master side is retained for
     // reading/writing to the shell.
-    let mut pty = tty::new(&config, options, display.size(), window_id);
+    let mut pty = tty::new(&config, options, &display.size(), window_id);
 
     // Create the pseudoterminal I/O loop
     //

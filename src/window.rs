@@ -16,8 +16,11 @@ use std::fmt::{self, Display};
 use std::ops::Deref;
 
 use gl;
-use glutin::{self, EventsLoop, WindowBuilder, Event, MouseCursor, CursorState, ControlFlow, ContextBuilder};
+use glutin::{self, ContextBuilder, ControlFlow, CursorState, Event, EventsLoop,
+             MouseCursor as GlutinMouseCursor, WindowBuilder};
 use glutin::GlContext;
+
+use MouseCursor;
 
 use config::WindowConfig;
 
@@ -193,14 +196,16 @@ impl Window {
         Window::platform_window_init();
         let window = WindowBuilder::new()
             .with_title(title)
+            .with_visibility(false)
             .with_transparency(true)
             .with_decorations(window_config.decorations());
         let context = ContextBuilder::new()
             .with_vsync(true);
         let window = ::glutin::GlWindow::new(window, context, &event_loop)?;
+        window.show();
 
         // Text cursor
-        window.set_cursor(MouseCursor::Text);
+        window.set_cursor(GlutinMouseCursor::Text);
 
         // Set OpenGL symbol loader
         gl::load_with(|symbol| window.get_proc_address(symbol) as *const _);
@@ -234,7 +239,7 @@ impl Window {
 
     pub fn inner_size_pixels(&self) -> Option<Size<Pixels<u32>>> {
         self.window
-            .get_inner_size_pixels()
+            .get_inner_size()
             .map(|(w, h)| Size { width: Pixels(w), height: Pixels(h) })
     }
 
@@ -282,6 +287,14 @@ impl Window {
     #[inline]
     pub fn set_title(&self, title: &str) {
         self.window.set_title(title);
+    }
+
+    #[inline]
+    pub fn set_mouse_cursor(&self, cursor: MouseCursor) {
+        self.window.set_cursor(match cursor {
+            MouseCursor::Arrow => GlutinMouseCursor::Arrow,
+            MouseCursor::Text => GlutinMouseCursor::Text,
+        });
     }
 
     /// Set cursor visible
