@@ -167,7 +167,7 @@ something is still found to be missing, please open an issue.
 sudo eopkg install fontconfig-devel
 ```
 
-### NixOS/Nixpkgs
+#### NixOS/Nixpkgs
 
 The following command can be used to get a shell with all development
 dependencies on [NixOS](https://nixos.org).
@@ -195,6 +195,16 @@ sudo emerge alacritty
 It might be handy to mask all other packages provided in the `slyfox` overlay by
 adding `*/*::slyfox` to `/etc/portage/package.mask` and adding
 `x11-terms/alacritty::slyfox` to `/etc/portage/package.unmask`.
+
+### Cargo
+
+If you have a rust toolchain setup you can install Alacritty via cargo:
+
+```sh
+cargo install --git https://github.com/jwilm/alacritty
+```
+
+Note that you still need to download system build dependencies via your package manager as mentioned above. The binary `alacritty` will be placed into `$HOME/.cargo/bin`. Make sure it is in your path (default if you use `rustup`).
 
 #### Other
 
@@ -234,8 +244,10 @@ cp -r target/release/osx/Alacritty.app /Applications/
 
 Although it's possible the default configuration would work on your system,
 you'll probably end up wanting to customize it anyhow. There is a default
-`alacritty.yml` at the git repository root. Alacritty looks for the
-configuration file as the following paths:
+`alacritty.yml` and `alacritty_macos.yml` at the git repository root for
+Linux and macOS repsectively.
+
+Alacritty looks for the configuration file at the following paths:
 
 1. `$XDG_CONFIG_HOME/alacritty/alacritty.yml`
 2. `$XDG_CONFIG_HOME/alacritty.yml`
@@ -252,7 +264,7 @@ the config file. The only exception is the `font` and `dimensions` sections
 which requires Alacritty to be restarted. For further explanation of the config
 file, please consult the comments in the default config file.
 
-## Issues (known, unknown, feature requests, etc)
+## Issues (known, unknown, feature requests, etc.)
 
 If you run into a problem with Alacritty, please file an issue. If you've got a
 feature request, feel free to ask about it. Keep in mind that Alacritty is very
