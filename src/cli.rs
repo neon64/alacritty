@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 extern crate log;
-use built_info;
 use clap::{Arg, App};
 use index::{Line, Column};
 use config::{Dimensions, Shell};
@@ -21,14 +20,6 @@ use std::borrow::Cow;
 
 const DEFAULT_TITLE: &str = "Alacritty";
 
-fn crate_long_version() -> String {
-    format!("{} (git commit {}) [{} build using {}])",
-        built_info::PKG_VERSION,
-        built_info::GIT_VERSION.unwrap_or(""),
-        built_info::PROFILE,
-        built_info::RUSTC_VERSION)
-}
-
 /// Options specified on the command line
 pub struct Options {
     pub live_config_reload: Option<bool>,
@@ -36,7 +27,7 @@ pub struct Options {
     pub ref_test: bool,
     pub dimensions: Option<Dimensions>,
     pub title: String,
-    pub log_level: log::LogLevelFilter,
+    pub log_level: log::LevelFilter,
     pub command: Option<Shell<'static>>,
     pub working_dir: Option<PathBuf>,
     pub config: Option<PathBuf>,
@@ -50,7 +41,7 @@ impl Default for Options {
             ref_test: false,
             dimensions: None,
             title: DEFAULT_TITLE.to_owned(),
-            log_level: log::LogLevelFilter::Warn,
+            log_level: log::LevelFilter::Warn,
             command: None,
             working_dir: None,
             config: None,
@@ -65,7 +56,6 @@ impl Options {
 
         let matches = App::new(crate_name!())
             .version(crate_version!())
-            .long_version(crate_long_version().as_str())
             .author(crate_authors!("\n"))
             .about(crate_description!())
             .arg(Arg::with_name("ref-test")
@@ -148,15 +138,15 @@ impl Options {
 
         match matches.occurrences_of("q") {
             0 => {},
-            1 => options.log_level = log::LogLevelFilter::Error,
-            2 | _ => options.log_level = log::LogLevelFilter::Off
+            1 => options.log_level = log::LevelFilter::Error,
+            2 | _ => options.log_level = log::LevelFilter::Off
         }
 
         match matches.occurrences_of("v") {
             0 => {},
-            1 => options.log_level = log::LogLevelFilter::Info,
-            2 => options.log_level = log::LogLevelFilter::Debug,
-            3 | _ => options.log_level = log::LogLevelFilter::Trace
+            1 => options.log_level = log::LevelFilter::Info,
+            2 => options.log_level = log::LevelFilter::Debug,
+            3 | _ => options.log_level = log::LevelFilter::Trace
         }
 
         if let Some(dir) = matches.value_of("working-directory") {
